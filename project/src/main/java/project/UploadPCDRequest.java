@@ -31,9 +31,13 @@ public class UploadPCDRequest extends HttpServlet {
 		
 		blobstoreService.serve(blobKey, response);
 		
-        Queue queue = QueueFactory.getDefaultQueue();
-        queue.add(withUrl("/worker").param("blobkey", blobKey.getKeyString()));
 		
-		response.sendRedirect("/processing.jsp?keyname=" + blobKey);
-    }
+		
+        Queue queue = QueueFactory.getDefaultQueue();
+        queue.add(withUrl("/PCDWorker").param("blobKey", blobKey.getKeyString()));
+		
+//		response.sendRedirect("/processing.jsp?keyname=" + blobKey);
+		response.sendRedirect("/processing.html");
+		  
+	}
 }
