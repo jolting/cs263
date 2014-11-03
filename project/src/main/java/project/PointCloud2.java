@@ -13,7 +13,7 @@ public class PointCloud2 {
 	int point_step;
 	int row_step;
 	
-	Byte [] data;
+	byte[] data;
 	
 	Boolean is_dense;
 

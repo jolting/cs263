@@ -53,6 +53,7 @@ import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.labs.repackaged.com.google.common.primitives.UnsignedInteger;
 
 import java.util.Arrays;
 import java.util.Calendar;
@@ -65,6 +66,38 @@ public class PCDWorker extends HttpServlet {
 	 */
 	private static final long serialVersionUID = 1L;
 
+	byte getFieldType (int size, char type)
+	  {
+	    type =  Character.toUpperCase(type);
+	    switch (size)
+	    {
+	      case 1:
+	        if (type == 'I')
+	          return (PointField.INT8);
+	        if (type == 'U')
+	          return (PointField.UINT8);
+
+	      case 2:
+	        if (type == 'I')
+	          return (PointField.INT16);
+	        if (type == 'U')
+	          return (PointField.UINT16);
+
+	      case 4:
+	        if (type == 'I')
+	          return (PointField.INT32);
+	        if (type == 'U')
+	          return (PointField.UINT32);
+	        if (type == 'F')
+	          return (PointField.FLOAT32);
+
+	      case 8:
+	        return (PointField.FLOAT64);
+
+	      default:
+	        return (-1);
+	    }
+	
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String key = request.getParameter("blobKey");
@@ -79,14 +112,20 @@ public class PCDWorker extends HttpServlet {
 		String pcdfile = new String(data);
 		String[] pcdlines = pcdfile.split("\n");
 		
+		PointCloud2 cloud = new PointCloud2();
+		
+		int[] field_sizes = null;
+		char[] field_types = null;
+		
+		int nr_points;
 		int specified_channel_count;
 		// This code was translated from c++ to java
 		//	https://github.com/PointCloudLibrary/pcl/blob/master/io/src/pcd_io.cpp
-		for(int i = 0; i < pcdlines.length; i ++){
+		int lineNo;
+		for(lineNo = 0; lineNo < pcdlines.length; lineNo ++){
 			String line = pcdlines[i].trim();
-			String tokens[]  = line.split("\t|\r| ");
-			String line_type = tokens[0];
-			String st[]      = Arrays.copyOfRange(tokens, 1, tokens.length);
+			String st[]  = line.split("\t|\r| ");
+			String line_type = st[0];
 			
 		    if (line_type.substring(0, 1) == "#")
 		          continue;
@@ -102,22 +141,22 @@ public class PCDWorker extends HttpServlet {
 		          specified_channel_count = (st.length - 1);
 
 		          // Allocate enough memory to accommodate all fields
-		          //todo: cloud.fields.resize (specified_channel_count);
+		          cloud.fields = new PointField[specified_channel_count];
 		          for (int i1 = 0; i1 < specified_channel_count; ++i1)
 		          {
 		            String col_type = st[i1 + 1];
-		            //todo: cloud.fields[i].name = col_type;
+		            cloud.fields[i].name = col_type;
 		          }
 
 		          // Default the sizes and the types of each field to float32 to avoid crashes while using older PCD files
 		          int offset = 0;
-		          for (int i1 = 0; i1 < specified_channel_count; ++i1, offset += 4)
+		          for (int i = 0; i < specified_channel_count; ++i, offset += 4)
 		          {
-		            //todo: cloud.fields[i1].offset   = offset;
-		            //todo: cloud.fields[i1].datatype = pcl::PCLPointField::FLOAT32;
-		            //todo: cloud.fields[i1].count    = 1;
+		            cloud.fields[i].offset   = offset;
+		            cloud.fields[i].datatype = PointField.FLOAT32;
+		            cloud.fields[i].count    = 1;
 		          }
-		          //todo: cloud.point_step = offset;
+		          cloud.point_step = offset;
 		          continue;
 		        }
 
@@ -127,100 +166,99 @@ public class PCDWorker extends HttpServlet {
 		          specified_channel_count = st.length - 1;
 
 		          // Allocate enough memory to accommodate all fields
-		          //todo: if (specified_channel_count != cloud.fields.size)
-		          //  throw new PCDException("The number of elements in <SIZE> differs than the number of elements in <FIELDS>!");
+		          if (specified_channel_count != cloud.fields.length)
+		        	  throw new PCDException("The number of elements in <SIZE> differs than the number of elements in <FIELDS>!");
 
 		          // Resize to accommodate the number of values
-		          //todo: field_sizes.resize (specified_channel_count);
+		          field_sizes = new int[specified_channel_count];
 		          
-		          /*
+		          
 		          int offset = 0;
-		          for (int i1 = 0; i1 < specified_channel_count; ++i1)
+		          for (int i = 0; i < specified_channel_count; ++i)
 		          {
 		            int col_type ;
-		            sstream >> col_type;
-		            cloud.fields[i1].offset = offset;                // estimate and save the data offsets
+		            col_type = Integer.parseInt(st[i + 1]);
+		            cloud.fields[i].offset = offset;                // estimate and save the data offsets
 		            offset += col_type;
-		            field_sizes[i1] = col_type;                      // save a temporary copy
+		            field_sizes[i] = col_type;                      // save a temporary copy
 		          }
 		          cloud.point_step = offset;
-		          */
-		          //if (cloud.width != 0)
-		            //cloud.row_step   = cloud.point_step * cloud.width;
+		          
+		          if (cloud.width != 0)
+		            cloud.row_step   = cloud.point_step * cloud.width;
 		          continue;
 		        }
 
 		        // Get the field types
 		        if (line_type.substring (0, 4) == "TYPE")
 		        {
-		        	/*
-		          if (field_sizes.empty ())
-		        	  new PCDException(throw "TYPE of FIELDS specified before SIZE in header!");
+		        
+		          if (field_sizes == null)
+		        	  throw new PCDException( "TYPE of FIELDS specified before SIZE in header!");
 
-		          specified_channel_count = static_cast<int> (st.size () - 1);
+		          specified_channel_count = st.length - 1;
 
 		          // Allocate enough memory to accommodate all fields
-		          if (specified_channel_count != static_cast<int> (cloud.fields.size ()))
+		          if (specified_channel_count != cloud.fields.length)
 		            throw new PCDException("The number of elements in <TYPE> differs than the number of elements in <FIELDS>!");
 
 		          // Resize to accommodate the number of values
-		          field_types.resize (specified_channel_count);
+		          field_types = new char[specified_channel_count];
 
 		          for (int i = 0; i < specified_channel_count; ++i)
 		          {
-		            field_types[i] = st.at (i + 1).c_str ()[0];
-		            cloud.fields[i].datatype = static_cast<uint8_t> (getFieldType (field_sizes[i], field_types[i]));
+		            field_types[i] = st[i + 1].charAt(0);
+		            cloud.fields[i].datatype = getFieldType (field_sizes[i], field_types[i]);
 		          }
-		          */
+		          
 		          continue;
 		        }
 
 		        // Get the field counts
 		        if (line_type.substring (0, 5) == "COUNT")
 		        {
-		        	/*
-		          if (field_sizes.empty () || field_types.empty ())
+		        
+		          if (field_sizes == null|| field_types == null)
 		            throw new PCDException("COUNT of FIELDS specified before SIZE or TYPE in header!");
 
-		          specified_channel_count = static_cast<int> (st.size () - 1);
+		          specified_channel_count = st.length - 1;
 
 		          // Allocate enough memory to accommodate all fields
-		          if (specified_channel_count != static_cast<int> (cloud.fields.size ()))
+		          if (specified_channel_count != cloud.fields.length)
 		            throw new PCDException("The number of elements in <COUNT> differs than the number of elements in <FIELDS>!");
 
-		          field_counts.resize (specified_channel_count);
-
 		          int offset = 0;
-		          for (int i = 0; i < specified_channel_count; ++i)
+		          int i1;
+				for (int i = 0; i1 < specified_channel_count; ++i1)
 		          {
-		            cloud.fields[i].offset = offset;
+		            cloud.fields[i1].offset = offset;
 		            int col_count;
-		            sstream >> col_count;
-		            cloud.fields[i].count = col_count;
-		            offset += col_count * field_sizes[i];
+		            col_count = Integer.parseInt(st[i1 + 1]);
+		            cloud.fields[i1].count = col_count;
+		            offset += col_count * field_sizes[i1];
 		          }
 		          // Adjust the offset for count (number of elements)
 		          cloud.point_step = offset;
-		          */
+		          
 		          continue;
 		        }
 
 		        // Get the width of the data (organized point cloud dataset)
 		        if (line_type.substring (0, 5) == "WIDTH")
 		        {
-		          /*
-		          sstream >> cloud.width;
+		          
+		          cloud.width = Integer.parseInt(st[1]);
 		          if (cloud.point_step != 0)
 		            cloud.row_step = cloud.point_step * cloud.width;      // row_step only makes sense for organized datasets
-		          */
+		          
 		          continue;
 		        }
 
 		        // Get the height of the data (organized point cloud dataset)
 		        if (line_type.substring (0, 6) == "HEIGHT")
 		        {
-		          //sstream >> cloud.height;
-		          continue;
+		        	cloud.height = Integer.parseInt(st[1]);
+			        continue;
 		        }
 
 		        // Check the format of the acquisition viewpoint
@@ -234,16 +272,109 @@ public class PCDWorker extends HttpServlet {
 		        // Get the number of points
 		        if (line_type.substring (0, 6) == "POINTS")
 		        {
-		        	/*
-		          sstream >> nr_points;
+		        
+		          nr_points = Integer.parseInt(st[1]);
+		        
 		          // Need to allocate: N * point_step
-		          cloud.data.resize (nr_points * cloud.point_step);
-		          */
+		          cloud.data = new byte[nr_points * cloud.point_step];
+		         
 		          continue;
 		        }	
 		        /* done reading the header */
 		        break;
 		}
+		
+		
+		for (int idx = 0; idx < nr_points && lineNo < pcdlines.length; lineNo ++)
+	    {
+	        String line = pcdlines[lineNo];
+	    }
+		
+	        // Ignore empty lines
+	        if (line == "")
+	          continue;
+
+	        // Tokenize the line
+	        boost::trim (line);
+	        boost::split (st, line, boost::is_any_of ("\t\r "), boost::token_compress_on);
+	        
+	        if (idx >= nr_points)
+	        {
+	          PCL_WARN ("[pcl::PCDReader::read] input file %s has more points (%d) than advertised (%d)!\n", file_name.c_str (), idx, nr_points);
+	          break;
+	        }
+
+	        size_t total = 0;
+	        // Copy data
+	        for (unsigned int d = 0; d < static_cast<unsigned int> (cloud.fields.size ()); ++d)
+	        {
+	          // Ignore invalid padded dimensions that are inherited from binary data
+	          if (cloud.fields[d].name == "_")
+	          {
+	            total += cloud.fields[d].count; // jump over this many elements in the string token
+	            continue;
+	          }
+	          for (unsigned int c = 0; c < cloud.fields[d].count; ++c)
+	          {
+	            switch (cloud.fields[d].datatype)
+	            {
+	              case pcl::PCLPointField::INT8:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT8>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::UINT8:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT8>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::INT16:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT16>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::UINT16:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT16>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::INT32:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT32>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::UINT32:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT32>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::FLOAT32:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::FLOAT32>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              case pcl::PCLPointField::FLOAT64:
+	              {
+	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::FLOAT64>::type> (
+	                    st.at (total + c), cloud, idx, d, c);
+	                break;
+	              }
+	              default:
+	                PCL_WARN ("[pcl::PCDReader::read] Incorrect field data type specified (%d)!\n",cloud.fields[d].datatype);
+	                break;
+	            }
+	          }
+	          total += cloud.fields[d].count; // jump over this many elements in the string token
+	        }
+	        idx++;
+	      }
 		
 		
 		
