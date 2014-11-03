@@ -80,7 +80,7 @@ public class PCDWorker extends HttpServlet {
 		String[] pcdlines = pcdfile.split("\n");
 		
 		int specified_channel_count;
-		// This code was transcribe from 
+		// This code was translated from c++ to java
 		//	https://github.com/PointCloudLibrary/pcl/blob/master/io/src/pcd_io.cpp
 		for(int i = 0; i < pcdlines.length; i ++){
 			String line = pcdlines[i].trim();
