@@ -41,6 +41,7 @@
 package project;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -66,6 +67,26 @@ public class PCDWorker extends HttpServlet {
 	 */
 	private static final long serialVersionUID = 1L;
 
+	  void
+	  copyStringValueFloat (String st, PointCloud2 cloud,
+	                   int point_index, int field_idx, int fields_count)
+	  {
+	    float value;
+	    if (st == "nan")
+	    {
+	      value = Float.NaN;
+	      cloud.is_dense = false;
+	    }
+	    else
+	    {
+	    	value = Float.parseFloat(st);
+	    }
+
+	    ByteBuffer.wrap(cloud.data).putFloat(point_index*cloud.point_step + 
+	    									 cloud.fields[field_idx].offset + 
+	    									 fields_count * 4,value).array();
+	  }
+	
 	byte getFieldType (int size, char type)
 	  {
 	    type =  Character.toUpperCase(type);
@@ -95,8 +116,9 @@ public class PCDWorker extends HttpServlet {
 	        return (PointField.FLOAT64);
 
 	      default:
-	        return (-1);
+	        return (byte) -1;
 	    }
+	  }
 	
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -117,13 +139,13 @@ public class PCDWorker extends HttpServlet {
 		int[] field_sizes = null;
 		char[] field_types = null;
 		
-		int nr_points;
+		int nr_points = 0;
 		int specified_channel_count;
 		// This code was translated from c++ to java
 		//	https://github.com/PointCloudLibrary/pcl/blob/master/io/src/pcd_io.cpp
 		int lineNo;
 		for(lineNo = 0; lineNo < pcdlines.length; lineNo ++){
-			String line = pcdlines[i].trim();
+			String line = pcdlines[lineNo].trim();
 			String st[]  = line.split("\t|\r| ");
 			String line_type = st[0];
 			
@@ -145,7 +167,7 @@ public class PCDWorker extends HttpServlet {
 		          for (int i1 = 0; i1 < specified_channel_count; ++i1)
 		          {
 		            String col_type = st[i1 + 1];
-		            cloud.fields[i].name = col_type;
+		            cloud.fields[i1].name = col_type;
 		          }
 
 		          // Default the sizes and the types of each field to float32 to avoid crashes while using older PCD files
@@ -229,13 +251,13 @@ public class PCDWorker extends HttpServlet {
 
 		          int offset = 0;
 		          int i1;
-				for (int i = 0; i1 < specified_channel_count; ++i1)
+				for (int i = 0; i < specified_channel_count; ++i)
 		          {
-		            cloud.fields[i1].offset = offset;
+		            cloud.fields[i].offset = offset;
 		            int col_count;
-		            col_count = Integer.parseInt(st[i1 + 1]);
-		            cloud.fields[i1].count = col_count;
-		            offset += col_count * field_sizes[i1];
+		            col_count = Integer.parseInt(st[i + 1]);
+		            cloud.fields[i].count = col_count;
+		            offset += col_count * field_sizes[i];
 		          }
 		          // Adjust the offset for count (number of elements)
 		          cloud.point_step = offset;
@@ -288,43 +310,37 @@ public class PCDWorker extends HttpServlet {
 		for (int idx = 0; idx < nr_points && lineNo < pcdlines.length; lineNo ++)
 	    {
 	        String line = pcdlines[lineNo];
-	    }
-		
+	        line = line.trim();
+	        String[] st = line.split("\t\r ");
 	        // Ignore empty lines
 	        if (line == "")
 	          continue;
-
-	        // Tokenize the line
-	        boost::trim (line);
-	        boost::split (st, line, boost::is_any_of ("\t\r "), boost::token_compress_on);
 	        
-	        if (idx >= nr_points)
-	        {
-	          PCL_WARN ("[pcl::PCDReader::read] input file %s has more points (%d) than advertised (%d)!\n", file_name.c_str (), idx, nr_points);
-	          break;
-	        }
+	        // Tokenize the line
+	        
 
-	        size_t total = 0;
+	        int total = 0;
 	        // Copy data
-	        for (unsigned int d = 0; d < static_cast<unsigned int> (cloud.fields.size ()); ++d)
+	        for (int d = 0; d < (cloud.fields.length); ++d)
 	        {
-	          // Ignore invalid padded dimensions that are inherited from binary data
+	          // Ignore invalid pad ded dimensions that are inherited from binary data
 	          if (cloud.fields[d].name == "_")
 	          {
 	            total += cloud.fields[d].count; // jump over this many elements in the string token
 	            continue;
 	          }
-	          for (unsigned int c = 0; c < cloud.fields[d].count; ++c)
+	          for (int c = 0; c < cloud.fields[d].count; ++c)
 	          {
 	            switch (cloud.fields[d].datatype)
 	            {
-	              case pcl::PCLPointField::INT8:
+	            /* only support parsing floats for now */
+	            /*
+	              case PointField.INT8:
 	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT8>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
+	                copyStringValue(st[total + c], cloud, idx, d, c);
 	                break;
 	              }
-	              case pcl::PCLPointField::UINT8:
+	              case PointField.UINT8:
 	              {
 	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT8>::type> (
 	                    st.at (total + c), cloud, idx, d, c);
@@ -354,28 +370,28 @@ public class PCDWorker extends HttpServlet {
 	                    st.at (total + c), cloud, idx, d, c);
 	                break;
 	              }
-	              case pcl::PCLPointField::FLOAT32:
+	              */
+	              case PointField.FLOAT32:
 	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::FLOAT32>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
+	                copyStringValueFloat(st[total + c], cloud, idx, d, c);
 	                break;
 	              }
-	              case pcl::PCLPointField::FLOAT64:
+	              /*
+	              case PointField.FLOAT64:
 	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::FLOAT64>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
+	                copyStringValue(st[total + c], cloud, idx, d, c);
 	                break;
 	              }
+	              */
 	              default:
-	                PCL_WARN ("[pcl::PCDReader::read] Incorrect field data type specified (%d)!\n",cloud.fields[d].datatype);
-	                break;
+	                throw new PCDException("[pcl::PCDReader::read] Incorrect field data type specified ("+ cloud.fields[d].datatype +")!\n");
 	            }
 	          }
 	          total += cloud.fields[d].count; // jump over this many elements in the string token
 	        }
 	        idx++;
-	      }
-		
+	    }
+	
 		
 		
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
