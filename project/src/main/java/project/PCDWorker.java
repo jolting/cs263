@@ -54,11 +54,6 @@ import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
-import com.google.appengine.labs.repackaged.com.google.common.primitives.UnsignedInteger;
-
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Date;
 
 // The Worker servlet should be mapped to the "/worker" URL.
 public class PCDWorker extends HttpServlet {
@@ -250,8 +245,8 @@ public class PCDWorker extends HttpServlet {
 		            throw new PCDException("The number of elements in <COUNT> differs than the number of elements in <FIELDS>!");
 
 		          int offset = 0;
-		          int i1;
-				for (int i = 0; i < specified_channel_count; ++i)
+		        
+		          for (int i = 0; i < specified_channel_count; ++i)
 		          {
 		            cloud.fields[i].offset = offset;
 		            int col_count;
@@ -391,9 +386,7 @@ public class PCDWorker extends HttpServlet {
 	        }
 	        idx++;
 	    }
-	
-		
-		
+
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
         Entity entity = new Entity("PCDBlobs", key);
         entity.setProperty("BlobKey", blobKey);
