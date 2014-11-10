@@ -42,6 +42,7 @@ package project;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.logging.Logger;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -67,7 +68,7 @@ public class PCDWorker extends HttpServlet {
 	                   int point_index, int field_idx, int fields_count)
 	  {
 	    float value;
-	    if (st == "nan")
+	    if (st.equals("nan"))
 	    {
 	      value = Float.NaN;
 	      cloud.is_dense = false;
@@ -139,30 +140,34 @@ public class PCDWorker extends HttpServlet {
 		// This code was translated from c++ to java
 		//	https://github.com/PointCloudLibrary/pcl/blob/master/io/src/pcd_io.cpp
 		int lineNo;
+		Logger log = Logger.getLogger(this.getServletName()); 
+		
 		for(lineNo = 0; lineNo < pcdlines.length; lineNo ++){
 			String line = pcdlines[lineNo].trim();
 			String st[]  = line.split("\t|\r| ");
-			String line_type = st[0];
+			TestString line_type = new TestString(line);
 			
-		    if (line_type.substring(0, 1) == "#")
+			log.info(line);
+		    if (line_type.substring(0, 1).equals("#"))
 		          continue;
 
 		        // Version numbers are not needed for now, but we are checking to see if they're there
-		    if (line_type.substring (0, 7) == "VERSION")
+		    if (line_type.substring (0, 7).equals("VERSION"))
 		          continue;
 
 		        // Get the field indices (check for COLUMNS too for backwards compatibility)
-		    if ( (line_type.substring (0, 6) == "FIELDS") || 
-		 		(line_type.substring (0, 7) == "COLUMNS") )
+		    if ( (line_type.substring (0, 6).equals("FIELDS")) || 
+		 		(line_type.substring (0, 7).equals("COLUMNS")) )
 		    {
 		          specified_channel_count = (st.length - 1);
 
 		          // Allocate enough memory to accommodate all fields
 		          cloud.fields = new PointField[specified_channel_count];
-		          for (int i1 = 0; i1 < specified_channel_count; ++i1)
+		          for (int i = 0; i < specified_channel_count; ++i)
 		          {
-		            String col_type = st[i1 + 1];
-		            cloud.fields[i1].name = col_type;
+		            String col_type = st[i + 1];
+			        cloud.fields[i] = new PointField();
+		            cloud.fields[i].name = col_type;
 		          }
 
 		          // Default the sizes and the types of each field to float32 to avoid crashes while using older PCD files
@@ -178,7 +183,7 @@ public class PCDWorker extends HttpServlet {
 		        }
 
 		        // Get the field sizes
-		    if (line_type.substring (0, 4) == "SIZE")
+		    if (line_type.substring (0, 4).equals("SIZE"))
 		    {
 		          specified_channel_count = st.length - 1;
 
@@ -207,7 +212,7 @@ public class PCDWorker extends HttpServlet {
 		        }
 
 		        // Get the field types
-		        if (line_type.substring (0, 4) == "TYPE")
+		        if (line_type.substring (0, 4).equals("TYPE"))
 		        {
 		        
 		          if (field_sizes == null)
@@ -232,7 +237,7 @@ public class PCDWorker extends HttpServlet {
 		        }
 
 		        // Get the field counts
-		        if (line_type.substring (0, 5) == "COUNT")
+		        if (line_type.substring (0, 5).equals("COUNT"))
 		        {
 		        
 		          if (field_sizes == null|| field_types == null)
@@ -261,7 +266,7 @@ public class PCDWorker extends HttpServlet {
 		        }
 
 		        // Get the width of the data (organized point cloud dataset)
-		        if (line_type.substring (0, 5) == "WIDTH")
+		        if (line_type.substring (0, 5).equals("WIDTH"))
 		        {
 		          
 		          cloud.width = Integer.parseInt(st[1]);
@@ -272,14 +277,14 @@ public class PCDWorker extends HttpServlet {
 		        }
 
 		        // Get the height of the data (organized point cloud dataset)
-		        if (line_type.substring (0, 6) == "HEIGHT")
+		        if (line_type.substring (0, 6).equals("HEIGHT"))
 		        {
 		        	cloud.height = Integer.parseInt(st[1]);
 			        continue;
 		        }
 
 		        // Check the format of the acquisition viewpoint
-		        if (line_type.substring (0, 9) == "VIEWPOINT")
+		        if (line_type.substring (0, 9).equals("VIEWPOINT"))
 		        {
 		          if (st.length < 8)
 		            throw new PCDException("Not enough number of elements in <VIEWPOINT>! Need 7 values (tx ty tz qw qx qy qz).");
@@ -287,7 +292,7 @@ public class PCDWorker extends HttpServlet {
 		        }
 
 		        // Get the number of points
-		        if (line_type.substring (0, 6) == "POINTS")
+		        if (line_type.substring (0, 6).equals("POINTS"))
 		        {
 		        
 		          nr_points = Integer.parseInt(st[1]);
@@ -308,7 +313,7 @@ public class PCDWorker extends HttpServlet {
 	        line = line.trim();
 	        String[] st = line.split("\t\r ");
 	        // Ignore empty lines
-	        if (line == "")
+	        if (line.equals(""))
 	          continue;
 	        
 	        // Tokenize the line
@@ -319,7 +324,7 @@ public class PCDWorker extends HttpServlet {
 	        for (int d = 0; d < (cloud.fields.length); ++d)
 	        {
 	          // Ignore invalid pad ded dimensions that are inherited from binary data
-	          if (cloud.fields[d].name == "_")
+	          if (cloud.fields[d].name.equals("_"))
 	          {
 	            total += cloud.fields[d].count; // jump over this many elements in the string token
 	            continue;
@@ -390,7 +395,15 @@ public class PCDWorker extends HttpServlet {
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
         Entity entity = new Entity("PCDBlobs", key);
         entity.setProperty("BlobKey", blobKey);
-        datastore.put(entity); 
+        entity.setProperty("Cloud", cloud);
+
+        datastore.put(entity);
+        
         
      }
+
+	private TestString TestString(String string) {
+		// TODO Auto-generated method stub
+		return null;
+	}
 }
