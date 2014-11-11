@@ -80,8 +80,28 @@ public class PCDWorker extends HttpServlet {
 
 	    ByteBuffer.wrap(cloud.data).putFloat(point_index*cloud.point_step + 
 	    									 cloud.fields[field_idx].offset + 
-	    									 fields_count * 4,value).array();
+	    									 fields_count * 4,value);
 	  }
+	  
+	  void
+	  copyStringValueUINT32(String st, PointCloud2 cloud,
+	                   int point_index, int field_idx, int fields_count) throws PCDException
+	  {
+	    int value;
+	    if (st.equals("nan"))
+	    {
+	      value = 0;
+	      cloud.is_dense = false;
+	    }
+	    else
+	    {
+	    	value = Integer.parseInt(st);
+	    }
+	    ByteBuffer.wrap(cloud.data).putInt(point_index*cloud.point_step + 
+	    									   cloud.fields[field_idx].offset + 
+	    									   fields_count * 4,value);
+	  }
+	  
 	
 	byte getFieldType (int size, char type)
 	  {
@@ -147,7 +167,6 @@ public class PCDWorker extends HttpServlet {
 			String st[]  = line.split("\t|\r| ");
 			TestString line_type = new TestString(line);
 			
-			log.info(line);
 		    if (line_type.substring(0, 1).equals("#"))
 		          continue;
 
@@ -301,6 +320,10 @@ public class PCDWorker extends HttpServlet {
 		          cloud.data = new byte[nr_points * cloud.point_step];
 		         
 		          continue;
+		        }
+		        if (line_type.substring (0, 4).equals("DATA"))
+		        {
+		          continue;
 		        }	
 		        /* done reading the header */
 		        break;
@@ -309,16 +332,20 @@ public class PCDWorker extends HttpServlet {
 		
 		for (int idx = 0; idx < nr_points && lineNo < pcdlines.length; lineNo ++)
 	    {
-	        String line = pcdlines[lineNo];
+			
+			String line = pcdlines[lineNo];
 	        line = line.trim();
-	        String[] st = line.split("\t\r ");
 	        // Ignore empty lines
 	        if (line.equals(""))
 	          continue;
-	        
+
+	        log.info(Integer.toString(idx));
+
+	        String[] st = line.split("\t|\r| ");
+
 	        // Tokenize the line
 	        
-
+	        
 	        int total = 0;
 	        // Copy data
 	        for (int d = 0; d < (cloud.fields.length); ++d)
@@ -358,19 +385,20 @@ public class PCDWorker extends HttpServlet {
 	                    st.at (total + c), cloud, idx, d, c);
 	                break;
 	              }
+	              
 	              case pcl::PCLPointField::INT32:
 	              {
 	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT32>::type> (
 	                    st.at (total + c), cloud, idx, d, c);
 	                break;
 	              }
-	              case pcl::PCLPointField::UINT32:
-	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT32>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
-	                break;
-	              }
 	              */
+	              case PointField.UINT32:
+	              {
+	            	  copyStringValueUINT32(st[total + c], cloud, idx, d, c);
+	            	  break;
+	              }
+	              
 	              case PointField.FLOAT32:
 	              {
 	                copyStringValueFloat(st[total + c], cloud, idx, d, c);
@@ -386,6 +414,7 @@ public class PCDWorker extends HttpServlet {
 	              default:
 	                throw new PCDException("[pcl::PCDReader::read] Incorrect field data type specified ("+ cloud.fields[d].datatype +")!\n");
 	            }
+	        	 
 	          }
 	          total += cloud.fields[d].count; // jump over this many elements in the string token
 	        }
