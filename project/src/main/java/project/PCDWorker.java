@@ -49,9 +49,12 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.google.appengine.api.blobstore.BlobInfo;
+import com.google.appengine.api.blobstore.BlobInfoFactory;
 import com.google.appengine.api.blobstore.BlobKey;
 import com.google.appengine.api.blobstore.BlobstoreService;
 import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
+import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
@@ -78,7 +81,7 @@ public class PCDWorker extends HttpServlet {
 	    	value = Float.parseFloat(st);
 	    }
 
-	    ByteBuffer.wrap(cloud.data).putFloat(point_index*cloud.point_step + 
+	    ByteBuffer.wrap(cloud.data.getBytes()).putFloat(point_index*cloud.point_step + 
 	    									 cloud.fields[field_idx].offset + 
 	    									 fields_count * 4,value);
 	  }
@@ -97,7 +100,7 @@ public class PCDWorker extends HttpServlet {
 	    {
 	    	value = Integer.parseInt(st);
 	    }
-	    ByteBuffer.wrap(cloud.data).putInt(point_index*cloud.point_step + 
+	    ByteBuffer.wrap(cloud.data.getBytes()).putInt(point_index*cloud.point_step + 
 	    									   cloud.fields[field_idx].offset + 
 	    									   fields_count * 4,value);
 	  }
@@ -142,12 +145,39 @@ public class PCDWorker extends HttpServlet {
         BlobKey blobKey = new BlobKey(key);
 		BlobstoreService blobstoreService = BlobstoreServiceFactory.getBlobstoreService();
 		
-		
+	    BlobInfo blobInfo = new BlobInfoFactory().loadBlobInfo(blobKey);
+		  
+		 if( blobInfo == null )
+		  return;
+		  
+		 if( blobInfo.getSize() > Integer.MAX_VALUE )
+		  throw new RuntimeException("This method can only process blobs up to " + Integer.MAX_VALUE + " bytes");
+		  
+		 int blobSize = (int)blobInfo.getSize();
+		 int chunks = (int)Math.ceil(((double)blobSize / BlobstoreService.MAX_BLOB_FETCH_SIZE));
+		 int totalBytesRead = 0;
+		 int startPointer = 0;
+		 int endPointer;
+		 byte[] blobBytes = new byte[blobSize];
+		  
+		 for( int i = 0; i < chunks; i++ ){
+		   
+		  endPointer = Math.min(blobSize - 1, startPointer + BlobstoreService.MAX_BLOB_FETCH_SIZE - 1);
+		   
+		  byte[] bytes = blobstoreService.fetchData(blobKey, startPointer, endPointer);
+		   
+		  for( int j = 0; j < bytes.length; j++ )
+		   blobBytes[j + totalBytesRead] = bytes[j];
+		   
+		  startPointer = endPointer + 1;
+		  totalBytesRead += bytes.length;
+		 
+		}
 		
 		/* todo: support larger files */
-		byte[] data = blobstoreService.fetchData(blobKey, 0,  BlobstoreService.MAX_BLOB_FETCH_SIZE-1);
+		//byte[] data = blobstoreService.fetchData(blobKey, 0,  BlobstoreService.MAX_BLOB_FETCH_SIZE-1);
         
-		String pcdfile = new String(data);
+		String pcdfile = new String(blobBytes);
 		String[] pcdlines = pcdfile.split("\n");
 		
 		PointCloud2 cloud = new PointCloud2();
@@ -317,8 +347,7 @@ public class PCDWorker extends HttpServlet {
 		          nr_points = Integer.parseInt(st[1]);
 		        
 		          // Need to allocate: N * point_step
-		          cloud.data = new byte[nr_points * cloud.point_step];
-		         
+		          cloud.data = new Blob(new byte[nr_points * cloud.point_step]);
 		          continue;
 		        }
 		        if (line_type.substring (0, 4).equals("DATA"))
@@ -339,7 +368,7 @@ public class PCDWorker extends HttpServlet {
 	        if (line.equals(""))
 	          continue;
 
-	        log.info(Integer.toString(idx));
+	        //log.info(Integer.toString(idx));
 
 	        String[] st = line.split("\t|\r| ");
 
@@ -422,10 +451,9 @@ public class PCDWorker extends HttpServlet {
 	    }
 
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
-        Entity entity = new Entity("PCDBlobs", key);
+        Entity entity = new Entity("PointClouds", key);
         entity.setProperty("BlobKey", blobKey);
-        entity.setProperty("Cloud", cloud);
-
+        entity.setProperty("PointCloud2", cloud);
         datastore.put(entity);
         
         

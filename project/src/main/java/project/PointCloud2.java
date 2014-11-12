@@ -1,19 +1,31 @@
 package project;
 
+import com.google.appengine.api.datastore.Blob;
 
-public class PointCloud2 {
+
+public class PointCloud2 implements java.io.Serializable{
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	PointCloud2()
+	{
+		width = new Integer(0);
+		height = new Integer(0);
+		
+	}
 	Header header;
-	int width;
-	int height;
+	Integer width;
+	Integer height;
 	
 	PointField [] fields;
 	
 	Boolean is_bigendian;
 	
-	int point_step;
-	int row_step;
+	Integer point_step;
+	Integer row_step;
 	
-	byte[] data;
+	Blob data;
 	
 	Boolean is_dense;
 
