@@ -2,8 +2,6 @@ package project;
 
 import javax.servlet.ServletException;
 
-//import com.google.api.server.spi.ServiceException;
-
 public class PCDException extends ServletException{
 
 	/**

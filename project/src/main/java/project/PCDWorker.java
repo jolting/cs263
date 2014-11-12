@@ -57,7 +57,12 @@ import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.EmbeddedEntity;
 import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.files.AppEngineFile;
+import com.google.appengine.api.files.FileService;
+import com.google.appengine.api.files.FileServiceFactory;
+import com.google.appengine.api.files.FileWriteChannel;
 
 // The Worker servlet should be mapped to the "/worker" URL.
 public class PCDWorker extends HttpServlet {
@@ -139,43 +144,44 @@ public class PCDWorker extends HttpServlet {
 	    }
 	  }
 	
+	@SuppressWarnings("deprecation")
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String key = request.getParameter("blobKey");
         BlobKey blobKey = new BlobKey(key);
 		BlobstoreService blobstoreService = BlobstoreServiceFactory.getBlobstoreService();
 		
+		// The next segment of code was from:
+		// http://bpossolo.blogspot.com/2012/04/method-for-fully-reading-blob-from.html
 	    BlobInfo blobInfo = new BlobInfoFactory().loadBlobInfo(blobKey);
 		  
-		 if( blobInfo == null )
+		if( blobInfo == null )
 		  return;
 		  
-		 if( blobInfo.getSize() > Integer.MAX_VALUE )
-		  throw new RuntimeException("This method can only process blobs up to " + Integer.MAX_VALUE + " bytes");
+		if( blobInfo.getSize() > Integer.MAX_VALUE )
+		 throw new RuntimeException("This method can only process blobs up to " + Integer.MAX_VALUE + " bytes");
 		  
-		 int blobSize = (int)blobInfo.getSize();
-		 int chunks = (int)Math.ceil(((double)blobSize / BlobstoreService.MAX_BLOB_FETCH_SIZE));
-		 int totalBytesRead = 0;
-		 int startPointer = 0;
-		 int endPointer;
-		 byte[] blobBytes = new byte[blobSize];
-		  
-		 for( int i = 0; i < chunks; i++ ){
-		   
-		  endPointer = Math.min(blobSize - 1, startPointer + BlobstoreService.MAX_BLOB_FETCH_SIZE - 1);
-		   
-		  byte[] bytes = blobstoreService.fetchData(blobKey, startPointer, endPointer);
-		   
-		  for( int j = 0; j < bytes.length; j++ )
-		   blobBytes[j + totalBytesRead] = bytes[j];
-		   
-		  startPointer = endPointer + 1;
-		  totalBytesRead += bytes.length;
+		int blobSize = (int)blobInfo.getSize();
+		int chunks = (int)Math.ceil(((double)blobSize / BlobstoreService.MAX_BLOB_FETCH_SIZE));
+		int totalBytesRead = 0;
+		int startPointer = 0;
+		int endPointer;
+		byte[] blobBytes = new byte[blobSize];
 		 
+		for( int i = 0; i < chunks; i++ ){
+		  
+		 endPointer = Math.min(blobSize - 1, startPointer + BlobstoreService.MAX_BLOB_FETCH_SIZE - 1);
+		  
+		 byte[] bytes = blobstoreService.fetchData(blobKey, startPointer, endPointer);
+		  
+		 for( int j = 0; j < bytes.length; j++ )
+		  blobBytes[j + totalBytesRead] = bytes[j];
+		  
+		 startPointer = endPointer + 1;
+		 totalBytesRead += bytes.length;
+		
 		}
 		
-		/* todo: support larger files */
-		//byte[] data = blobstoreService.fetchData(blobKey, 0,  BlobstoreService.MAX_BLOB_FETCH_SIZE-1);
         
 		String pcdfile = new String(blobBytes);
 		String[] pcdlines = pcdfile.split("\n");
@@ -190,7 +196,6 @@ public class PCDWorker extends HttpServlet {
 		// This code was translated from c++ to java
 		//	https://github.com/PointCloudLibrary/pcl/blob/master/io/src/pcd_io.cpp
 		int lineNo;
-		Logger log = Logger.getLogger(this.getServletName()); 
 		
 		for(lineNo = 0; lineNo < pcdlines.length; lineNo ++){
 			String line = pcdlines[lineNo].trim();
@@ -451,16 +456,33 @@ public class PCDWorker extends HttpServlet {
 	    }
 
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
-        Entity entity = new Entity("PointClouds", key);
-        entity.setProperty("BlobKey", blobKey);
-        entity.setProperty("PointCloud2", cloud);
-        datastore.put(entity);
+        Entity pointCloud2 = new Entity("PointCloud2", key);
+        pointCloud2.setProperty("width", cloud.width);
+        pointCloud2.setProperty("height", cloud.height);
+        pointCloud2.setProperty("is_bigendian", cloud.is_bigendian);
+        pointCloud2.setProperty("row_step", cloud.row_step);
+     //   pointCloud2.setProperty("fields", cloud.)
+        //pointCloud2.setProperty("data", cloud.data);
+        pointCloud2.setProperty("is_dense", cloud.is_dense);
+        
+        
+        /* too bad this is deprecated */
+        @SuppressWarnings("deprecation")
+		FileService fileService = FileServiceFactory.getFileService();
+        
+        @SuppressWarnings("deprecation")
+		AppEngineFile file = fileService.createNewBlobFile("UTF8");
+        
+        @SuppressWarnings("deprecation")
+		FileWriteChannel writeChannel = fileService.openWriteChannel(file, true);
+        
+        writeChannel.write(ByteBuffer.wrap((cloud.data.getBytes())));
+        writeChannel.closeFinally();
+        pointCloud2.setProperty("data", fileService.getBlobKey(file));
+        
+        datastore.put(pointCloud2);
         
         
      }
 
-	private TestString TestString(String string) {
-		// TODO Auto-generated method stub
-		return null;
-	}
 }
