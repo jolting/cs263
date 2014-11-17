@@ -42,7 +42,6 @@ package project;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.logging.Logger;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -57,14 +56,15 @@ import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
-import com.google.appengine.api.datastore.EmbeddedEntity;
 import com.google.appengine.api.datastore.Entity;
+
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileService;
 import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.api.files.FileWriteChannel;
 
 // The Worker servlet should be mapped to the "/worker" URL.
+@SuppressWarnings("deprecation")
 public class PCDWorker extends HttpServlet {
     /**
 	 * 
@@ -144,7 +144,6 @@ public class PCDWorker extends HttpServlet {
 	    }
 	  }
 	
-	@SuppressWarnings("deprecation")
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String key = request.getParameter("blobKey");
@@ -467,14 +466,11 @@ public class PCDWorker extends HttpServlet {
         
         
         /* too bad this is deprecated */
-        @SuppressWarnings("deprecation")
-		FileService fileService = FileServiceFactory.getFileService();
+        FileService fileService = FileServiceFactory.getFileService();
         
-        @SuppressWarnings("deprecation")
-		AppEngineFile file = fileService.createNewBlobFile("UTF8");
+        AppEngineFile file = fileService.createNewBlobFile("UTF8");
         
-        @SuppressWarnings("deprecation")
-		FileWriteChannel writeChannel = fileService.openWriteChannel(file, true);
+        FileWriteChannel writeChannel = fileService.openWriteChannel(file, true);
         
         writeChannel.write(ByteBuffer.wrap((cloud.data.getBytes())));
         writeChannel.closeFinally();
