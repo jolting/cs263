@@ -57,11 +57,12 @@ import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
-
+import com.google.appengine.api.datastore.KeyFactory;
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileService;
 import com.google.appengine.api.files.FileServiceFactory;
 import com.google.appengine.api.files.FileWriteChannel;
+import com.google.appengine.api.datastore.Key;
 
 // The Worker servlet should be mapped to the "/worker" URL.
 @SuppressWarnings("deprecation")
@@ -455,13 +456,27 @@ public class PCDWorker extends HttpServlet {
 	    }
 
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
-        Entity pointCloud2 = new Entity("PointCloud2", key);
+        Key pclKey = KeyFactory.createKey("PointCloud2", key);
+        Entity pointCloud2 = new Entity(pclKey);
         pointCloud2.setProperty("width", cloud.width);
         pointCloud2.setProperty("height", cloud.height);
         pointCloud2.setProperty("is_bigendian", cloud.is_bigendian);
         pointCloud2.setProperty("row_step", cloud.row_step);
-     //   pointCloud2.setProperty("fields", cloud.)
-        //pointCloud2.setProperty("data", cloud.data);
+
+        int idx = 0;
+        for(PointField field :cloud.fields)
+        {
+            Entity efield = new Entity("PointField");
+            efield.setProperty("cloud",key);
+            efield.setProperty("count", field.count); 
+        	efield.setProperty("name", field.name); 
+        	efield.setProperty("datatype", field.datatype); 
+        	efield.setProperty("offset", field.offset);
+        	efield.setProperty("idx", idx);
+        	idx++;
+        	datastore.put(efield);
+        }
+        
         pointCloud2.setProperty("is_dense", cloud.is_dense);
         
         

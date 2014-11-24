@@ -41,6 +41,7 @@
 package project;
 
 
+import java.io.IOException;
 import java.util.List;
 
 import javax.servlet.ServletOutputStream;
@@ -48,12 +49,22 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.google.appengine.api.blobstore.BlobInfo;
+import com.google.appengine.api.blobstore.BlobInfoFactory;
+import com.google.appengine.api.blobstore.BlobKey;
+import com.google.appengine.api.blobstore.BlobstoreService;
+import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.FetchOptions;
+import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.api.datastore.PreparedQuery;
 import com.google.appengine.api.datastore.Query;
-
+import com.google.appengine.api.datastore.Key;
+import com.google.appengine.api.datastore.Query.Filter;
+import com.google.appengine.api.datastore.Query.FilterOperator;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
 
 // The Worker servlet should be mapped to the "/worker" URL.
 
@@ -64,53 +75,167 @@ public class GetPCD extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 
 	
-	protected void doGet(HttpServletRequest request, HttpServletResponse response){
-		String pclkey = request.getParameter("key");
+	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException{
+		String keyStr = request.getParameter("key");
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
 
-        Query query = new Query("PointCloud2", pclkey);
-        List<Entity> pointclouds = datastore.prepare(query).asList(FetchOptions.Builder.withLimit(1));
+        Key pclKey = KeyFactory.createKey("PointCloud2", keyStr);
         
-		Entity pointCloud2 = pointclouds.get(0);
-        PointCloud2 cloud = new PointCloud2();
+        Query query = new Query(pclKey);
         
-		cloud.width = (Integer) pointCloud2.getProperty("width");	
-        cloud.height = (Integer) pointCloud2.getProperty("height");
-        cloud.is_bigendian = (Boolean) pointCloud2.getProperty("is_bigendian");
-        cloud.row_step = (Integer) pointCloud2.getProperty("row_step");
-        cloud.is_dense = (Boolean) pointCloud2.getProperty("is_dense");
+        try{
+          Entity pointCloud2 = datastore.prepare(query).asSingleEntity();
+          if(pointCloud2 == null)
+          {
+              ServletOutputStream out = response.getOutputStream();
+              out.println("Can't find point cloud "+ keyStr);
+              out.flush();
+        	  return;
+          }
+          PointCloud2 cloud = new PointCloud2();
         
-        ServletOutputStream out = response.getOutputStream();
-        out.println("# .PCD v0.7 - Point Cloud Data file format");
-        out.println(getFieldstr(cloud));
-        out.println(getTypeStr(cloud));
-        out.println(getTypeStr(cloud));
-        out.println(getCountStr(cloud));
-        out.println("WIDTH " + cloud.width);
-        out.println("HEIGHT " + cloud.height);
-        out.println("VIEWPOINT 0 0 0 0 0 0 0");
-        out.println("POINTS " + cloud.width * cloud.height);
-        out.println("DATA binary");
-        out.write(cloud.data.getBytes());
-        out.flush();
+		  cloud.width = Integer.valueOf(((Long) pointCloud2.getProperty("width")).intValue());	
+          cloud.height = Integer.valueOf(((Long) pointCloud2.getProperty("height")).intValue());
+          cloud.is_bigendian = (Boolean) pointCloud2.getProperty("is_bigendian");
+          cloud.row_step = Integer.valueOf(((Long) pointCloud2.getProperty("row_step")).intValue());	      
+          cloud.is_dense = (Boolean) pointCloud2.getProperty("is_dense");
+
+          Filter filter =
+        		  new FilterPredicate("cloud",
+        		                      FilterOperator.EQUAL,
+        		                      keyStr);
+          
+          Query fieldQuery = new Query("PointField").setFilter(filter);
+          PreparedQuery fields = datastore.prepare(fieldQuery);
+          List<Entity>lFields = fields.asList(FetchOptions.Builder.withDefaults());
+          cloud.fields = new PointField[lFields.size()];
+          int i;
+          for(i = 0; i < lFields.size(); i++){
+        	  int idx = ((Long) lFields.get(i).getProperty("idx")).intValue();
+        	  cloud.fields[idx] = new PointField();
+        	  cloud.fields[idx].count    = Integer.valueOf(((Long) lFields.get(i).getProperty("count")).intValue());
+        	  cloud.fields[idx].offset   = Integer.valueOf(((Long) lFields.get(i).getProperty("offset")).intValue());
+        	  cloud.fields[idx].datatype = Byte.valueOf(((Long) lFields.get(i).getProperty("datatype")).byteValue());
+        	  cloud.fields[idx].name     = (String)  lFields.get(i).getProperty("name");
+          }
+          
+          
+          BlobKey blobKey =(BlobKey) pointCloud2.getProperty("data");
+          
+          ServletOutputStream out = response.getOutputStream();
+          out.println("# .PCD v0.7 - Point Cloud Data file format");
+          out.println("VERSION 0.7");
+          out.println(getFieldstr(cloud));
+          out.println(getSizeStr(cloud));
+          out.println(getTypeStr(cloud));
+          out.println(getCountStr(cloud));
+          out.println("WIDTH " + cloud.width);
+          out.println("HEIGHT " + cloud.height);
+          out.println("VIEWPOINT 0 0 0 1 0 0 0");
+          out.println("POINTS " + cloud.width * cloud.height);
+          out.println("DATA binary");
+          
+          BlobstoreService blobstoreService =  BlobstoreServiceFactory.getBlobstoreService();
+
+
+          BlobInfo blobInfo = new BlobInfoFactory().loadBlobInfo(blobKey);
+		  
+          if( blobInfo == null )
+        	  return;
+  		  
+          if( blobInfo.getSize() > Integer.MAX_VALUE )
+        	  throw new RuntimeException("This method can only process blobs up to " + Integer.MAX_VALUE + " bytes");
+  		  
+  		  int blobSize = (int)blobInfo.getSize();
+  		  int chunks = (int)Math.ceil(((double)blobSize / BlobstoreService.MAX_BLOB_FETCH_SIZE));
+  		  int startPointer = 0;
+  		  int endPointer;
+  		 
+  		  for(i = 0; i < chunks; i++ ){
+  		   endPointer = Math.min(blobSize - 1, startPointer + BlobstoreService.MAX_BLOB_FETCH_SIZE - 1);
+  		  
+  		   byte[] bytes = blobstoreService.fetchData(blobKey, startPointer, endPointer);
+   		   out.write(bytes);
+  		  }
+
+          
+//          out.write(cloud.data.getBytes());
+          out.flush();
+        }
+        catch(IndexOutOfBoundsException e)
+        {
+            ServletOutputStream out = response.getOutputStream();
+            out.println("can't fetch pointcloud "+ keyStr);
+            out.flush();
+        	
+        	
+        }
     }
 
 
 	private String getTypeStr(PointCloud2 cloud) {
-		// TODO Auto-generated method stub
-		return null;
+		String typeStr = new String("TYPE ");
+		for(PointField field: cloud.fields){
+			switch(field.datatype){
+			case(1):
+			case(3):
+			case(5):
+				typeStr = typeStr + " I";
+				break;
+			case(2):
+			case(4):
+			case(6):
+				typeStr = typeStr + " U";
+				break;
+			case(7):
+			case(8):
+				typeStr = typeStr + " F";
+				break;
+			}
+		}
+		return typeStr;
 	}
 
 
 	private String getCountStr(PointCloud2 cloud) {
-		// TODO Auto-generated method stub
-		return null;
+		String countStr = new String("COUNT ");
+		for(PointField field: cloud.fields){
+			countStr = countStr + " " + field.count;
+		}
+		return countStr;
+	}
+	private String getSizeStr(PointCloud2 cloud)
+	{
+		String typeStr = new String("SIZE ");
+		for(PointField field: cloud.fields){
+			switch(field.datatype){
+			case(1):
+			case(2):
+				typeStr = typeStr + " 1";
+				break;
+			case(3):
+			case(4):
+				typeStr = typeStr + " 2";
+				break;
+			case(5):
+			case(6):
+			case(7):
+			case(8):
+				typeStr = typeStr + " 4";
+				break;
+			}
+		}
+		return typeStr;
+			
+		
 	}
 
-
 	private String getFieldstr(PointCloud2 cloud) {
-		// TODO Auto-generated method stub
-		return null;
+		String fieldStr = new String("FIELDS ");
+		for(PointField field: cloud.fields){
+			fieldStr = fieldStr + " " + field.name;
+		}
+		return fieldStr;
 	}
 
 }
