@@ -26,7 +26,16 @@
     </servlet>
     <servlet-mapping>
         <servlet-name>GetPCD</servlet-name>
-        <url-pattern>/GetPCD</url-pattern>
+        <url-pattern>/GetPCD/*</url-pattern>
+    </servlet-mapping> 
+      
+    <servlet>
+        <servlet-name>GetPointClouds</servlet-name>
+        <servlet-class>project.GetPointClouds</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>GetPointClouds</servlet-name>
+        <url-pattern>/GetPointClouds</url-pattern>
     </servlet-mapping> 
     
     <welcome-file-list>

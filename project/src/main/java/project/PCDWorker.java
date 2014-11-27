@@ -42,6 +42,7 @@ package project;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -81,15 +82,31 @@ public class PCDWorker extends HttpServlet {
 	    {
 	      value = Float.NaN;
 	      cloud.is_dense = false;
+	      /*
+          cloud.data.getBytes()[point_index*cloud.point_step + 
+		    									 cloud.fields[field_idx].offset + 
+		    									 fields_count * 4] = (byte) 0x00;
+          cloud.data.getBytes()[point_index*cloud.point_step + 
+								 cloud.fields[field_idx].offset + 
+								 fields_count * 4+1] = (byte) 0x00;
+          cloud.data.getBytes()[point_index*cloud.point_step + 
+								 cloud.fields[field_idx].offset + 
+								 fields_count * 4+2] = (byte) 0x00;
+          cloud.data.getBytes()[point_index*cloud.point_step + 
+								 cloud.fields[field_idx].offset + 
+								 fields_count * 4+3] = (byte) 0x80;
+								 */
 	    }
 	    else
 	    {
 	    	value = Float.parseFloat(st);
 	    }
+//	    ByteBuffer.wrap(cloud.data.getBytes()).order(ByteOrder.LITTLE_ENDIAN)
 
-	    ByteBuffer.wrap(cloud.data.getBytes()).putFloat(point_index*cloud.point_step + 
-	    									 cloud.fields[field_idx].offset + 
-	    									 fields_count * 4,value);
+	    ByteBuffer.wrap(cloud.data.getBytes()).order(ByteOrder.LITTLE_ENDIAN).putFloat(point_index*cloud.point_step + 
+				 cloud.fields[field_idx].offset + 
+				 fields_count * 4,value);
+
 	  }
 	  
 	  void
@@ -104,11 +121,25 @@ public class PCDWorker extends HttpServlet {
 	    }
 	    else
 	    {
-	    	value = Integer.parseInt(st);
+	    	value = (int)Long.parseLong(st);
 	    }
-	    ByteBuffer.wrap(cloud.data.getBytes()).putInt(point_index*cloud.point_step + 
-	    									   cloud.fields[field_idx].offset + 
-	    									   fields_count * 4,value);
+	    /* unfortunately we don't have a uint32 version */
+	    cloud.data.getBytes()[point_index*cloud.point_step + 
+							  cloud.fields[field_idx].offset + 
+							  fields_count * 4] = (byte) (value);
+	    cloud.data.getBytes()[point_index*cloud.point_step + 
+							  cloud.fields[field_idx].offset + 
+							  fields_count * 4 + 1] = (byte) (value >> 8);
+	    cloud.data.getBytes()[point_index*cloud.point_step + 
+							  cloud.fields[field_idx].offset + 
+							  fields_count * 4 + 2] = (byte) (value >> 16);
+	    cloud.data.getBytes()[point_index*cloud.point_step + 
+							  cloud.fields[field_idx].offset + 
+							  fields_count * 4 + 3] = (byte) (value >> 24);
+
+//	    ByteBuffer.wrap(cloud.data.getBytes()).putInt(point_index*cloud.point_step + 
+//	    									   cloud.fields[field_idx].offset + 
+//	    									   fields_count * 4,value);
 	  }
 	  
 	

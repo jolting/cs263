@@ -76,7 +76,8 @@ public class GetPCD extends HttpServlet {
 
 	
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException{
-		String keyStr = request.getParameter("key");
+		
+		String keyStr =request.getPathInfo().substring(1);// request.getParameter("key");
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
 
         Key pclKey = KeyFactory.createKey("PointCloud2", keyStr);
@@ -88,7 +89,7 @@ public class GetPCD extends HttpServlet {
           if(pointCloud2 == null)
           {
               ServletOutputStream out = response.getOutputStream();
-              out.println("Can't find point cloud "+ keyStr);
+              out.print("Can't find point cloud "+ keyStr + "\n");
               out.flush();
         	  return;
           }
@@ -123,17 +124,17 @@ public class GetPCD extends HttpServlet {
           BlobKey blobKey =(BlobKey) pointCloud2.getProperty("data");
           
           ServletOutputStream out = response.getOutputStream();
-          out.println("# .PCD v0.7 - Point Cloud Data file format");
-          out.println("VERSION 0.7");
-          out.println(getFieldstr(cloud));
-          out.println(getSizeStr(cloud));
-          out.println(getTypeStr(cloud));
-          out.println(getCountStr(cloud));
-          out.println("WIDTH " + cloud.width);
-          out.println("HEIGHT " + cloud.height);
-          out.println("VIEWPOINT 0 0 0 1 0 0 0");
-          out.println("POINTS " + cloud.width * cloud.height);
-          out.println("DATA binary");
+          out.print("# .PCD v0.7 - Point Cloud Data file format\n");
+          out.print("VERSION 0.7\n");
+          out.print(getFieldstr(cloud)+"\n");
+          out.print(getSizeStr(cloud)+"\n");
+          out.print(getTypeStr(cloud)+"\n");
+          out.print(getCountStr(cloud)+"\n");
+          out.print("WIDTH " + cloud.width+"\n" );
+          out.print("HEIGHT " + cloud.height+"\n");
+          out.print("VIEWPOINT 0 0 0 1 0 0 0\n");
+          out.print("POINTS " + cloud.width * cloud.height + "\n");
+          out.print("DATA binary\n");
           
           BlobstoreService blobstoreService =  BlobstoreServiceFactory.getBlobstoreService();
 
@@ -153,9 +154,11 @@ public class GetPCD extends HttpServlet {
   		 
   		  for(i = 0; i < chunks; i++ ){
   		   endPointer = Math.min(blobSize - 1, startPointer + BlobstoreService.MAX_BLOB_FETCH_SIZE - 1);
-  		  
+  		   
   		   byte[] bytes = blobstoreService.fetchData(blobKey, startPointer, endPointer);
    		   out.write(bytes);
+   		   startPointer = endPointer + 1;
+		   
   		  }
 
           
@@ -174,7 +177,7 @@ public class GetPCD extends HttpServlet {
 
 
 	private String getTypeStr(PointCloud2 cloud) {
-		String typeStr = new String("TYPE ");
+		String typeStr = new String("TYPE");
 		for(PointField field: cloud.fields){
 			switch(field.datatype){
 			case(1):
@@ -198,7 +201,7 @@ public class GetPCD extends HttpServlet {
 
 
 	private String getCountStr(PointCloud2 cloud) {
-		String countStr = new String("COUNT ");
+		String countStr = new String("COUNT");
 		for(PointField field: cloud.fields){
 			countStr = countStr + " " + field.count;
 		}
@@ -206,7 +209,7 @@ public class GetPCD extends HttpServlet {
 	}
 	private String getSizeStr(PointCloud2 cloud)
 	{
-		String typeStr = new String("SIZE ");
+		String typeStr = new String("SIZE");
 		for(PointField field: cloud.fields){
 			switch(field.datatype){
 			case(1):
@@ -231,7 +234,7 @@ public class GetPCD extends HttpServlet {
 	}
 
 	private String getFieldstr(PointCloud2 cloud) {
-		String fieldStr = new String("FIELDS ");
+		String fieldStr = new String("FIELDS");
 		for(PointField field: cloud.fields){
 			fieldStr = fieldStr + " " + field.name;
 		}
