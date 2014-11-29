@@ -43,6 +43,7 @@ package project;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -205,6 +206,7 @@ public class PCDWorker extends HttpServlet {
 		  
 		 byte[] bytes = blobstoreService.fetchData(blobKey, startPointer, endPointer);
 		  
+		 
 		 for( int j = 0; j < bytes.length; j++ )
 		  blobBytes[j + totalBytesRead] = bytes[j];
 		  
@@ -212,6 +214,7 @@ public class PCDWorker extends HttpServlet {
 		 totalBytesRead += bytes.length;
 		
 		}
+
 		
         
 		String pcdfile = new String(blobBytes);
@@ -219,11 +222,14 @@ public class PCDWorker extends HttpServlet {
 		
 		PointCloud2 cloud = new PointCloud2();
 		
+		cloud.is_bigendian = new Boolean(false);
+		
 		int[] field_sizes = null;
 		char[] field_types = null;
 		
 		int nr_points = 0;
 		int specified_channel_count;
+		int textMode = 0;
 		// This code was translated from c++ to java
 		//	https://github.com/PointCloudLibrary/pcl/blob/master/io/src/pcd_io.cpp
 		int lineNo;
@@ -388,104 +394,86 @@ public class PCDWorker extends HttpServlet {
 		        }
 		        if (line_type.substring (0, 4).equals("DATA"))
 		        {
+		          if(st[1] == "ascii")
+		            textMode = 1;
+		          else if(st[1] == "binary")
+		        	textMode = 0;
+		          else
+		        	throw new PCDException("binary compressed not supported");
 		          continue;
 		        }	
 		        /* done reading the header */
 		        break;
 		}
 		
-		
-		for (int idx = 0; idx < nr_points && lineNo < pcdlines.length; lineNo ++)
-	    {
+		if(textMode == 1)
+		{
+			for (int idx = 0; idx < nr_points && lineNo < pcdlines.length; lineNo ++)
+			{
 			
-			String line = pcdlines[lineNo];
-	        line = line.trim();
-	        // Ignore empty lines
-	        if (line.equals(""))
-	          continue;
+				String line = pcdlines[lineNo];
+				line = line.trim();
+				// Ignore empty lines
+				if (line.equals(""))
+				  continue;
 
-	        //log.info(Integer.toString(idx));
+				//log.info(Integer.toString(idx));
 
-	        String[] st = line.split("\t|\r| ");
+				String[] st = line.split("\t|\r| ");
 
-	        // Tokenize the line
+				// Tokenize the line
 	        
 	        
-	        int total = 0;
-	        // Copy data
-	        for (int d = 0; d < (cloud.fields.length); ++d)
-	        {
-	          // Ignore invalid pad ded dimensions that are inherited from binary data
-	          if (cloud.fields[d].name.equals("_"))
-	          {
-	            total += cloud.fields[d].count; // jump over this many elements in the string token
-	            continue;
-	          }
-	          for (int c = 0; c < cloud.fields[d].count; ++c)
-	          {
-	            switch (cloud.fields[d].datatype)
-	            {
-	            /* only support parsing floats for now */
-	            /*
-	              case PointField.INT8:
-	              {
-	                copyStringValue(st[total + c], cloud, idx, d, c);
-	                break;
-	              }
-	              case PointField.UINT8:
-	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT8>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
-	                break;
-	              }
-	              case pcl::PCLPointField::INT16:
-	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT16>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
-	                break;
-	              }
-	              case pcl::PCLPointField::UINT16:
-	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::UINT16>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
-	                break;
-	              }
+				int total = 0;
+				// Copy data
+				for (int d = 0; d < (cloud.fields.length); ++d)
+				{
+					// Ignore invalid pad ded dimensions that are inherited from binary data
+					if (cloud.fields[d].name.equals("_"))
+					{
+						total += cloud.fields[d].count; // jump over this many elements in the string token
+						continue;
+					}
+					for (int c = 0; c < cloud.fields[d].count; ++c)
+					{
+						switch (cloud.fields[d].datatype)
+						{
+			
+						case PointField.UINT32:
+						{
+							copyStringValueUINT32(st[total + c], cloud, idx, d, c);
+							break;
+						}
 	              
-	              case pcl::PCLPointField::INT32:
-	              {
-	                copyStringValue<pcl::traits::asType<pcl::PCLPointField::INT32>::type> (
-	                    st.at (total + c), cloud, idx, d, c);
-	                break;
-	              }
-	              */
-	              case PointField.UINT32:
-	              {
-	            	  copyStringValueUINT32(st[total + c], cloud, idx, d, c);
-	            	  break;
-	              }
-	              
-	              case PointField.FLOAT32:
-	              {
-	                copyStringValueFloat(st[total + c], cloud, idx, d, c);
-	                break;
-	              }
-	              /*
-	              case PointField.FLOAT64:
-	              {
-	                copyStringValue(st[total + c], cloud, idx, d, c);
-	                break;
-	              }
-	              */
-	              default:
-	                throw new PCDException("[pcl::PCDReader::read] Incorrect field data type specified ("+ cloud.fields[d].datatype +")!\n");
-	            }
+						case PointField.FLOAT32:
+						{
+							copyStringValueFloat(st[total + c], cloud, idx, d, c);
+							break;
+						}
+						default:
+							throw new PCDException("[pcl::PCDReader::read] Incorrect field data type specified ("+ cloud.fields[d].datatype +")!\n");
+						}
 	        	 
-	          }
-	          total += cloud.fields[d].count; // jump over this many elements in the string token
-	        }
-	        idx++;
-	    }
-
+					}
+					total += cloud.fields[d].count; // jump over this many elements in the string token
+				}
+				idx++;
+			}
+		}
+		//binary mode
+		else
+		{
+			int i;
+			int j = 0;
+			/* find a bunch of newlines */
+			for(i = 0; i < lineNo; i++)
+			{
+				while(blobBytes[j++] != '\n');
+			}
+			
+			cloud.data = new Blob(Arrays.copyOfRange(blobBytes, j, blobBytes.length)); 	
+		}
+		
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
         Key pclKey = KeyFactory.createKey("PointCloud2", key);
         Entity pointCloud2 = new Entity(pclKey);
@@ -520,6 +508,10 @@ public class PCDWorker extends HttpServlet {
         
         writeChannel.write(ByteBuffer.wrap((cloud.data.getBytes())));
         writeChannel.closeFinally();
+        
+        // all done delete the original blob
+		blobstoreService.delete(blobKey);
+
         pointCloud2.setProperty("data", fileService.getBlobKey(file));
         
         datastore.put(pointCloud2);

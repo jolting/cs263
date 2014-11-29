@@ -11,6 +11,7 @@ BlobstoreService blobstoreService = BlobstoreServiceFactory.getBlobstoreService(
 </head>
 <p>type some data in here</p>
 <form action="<%= blobstoreService.createUploadUrl("/uploadPCDRequest") %>" method="post" enctype="multipart/form-data">
+<p>Name:<input type="text" name="Cloud Name"></p>
 <input type="file" name="myFile">
 <input type="submit" value="Submit"/>
 </form>

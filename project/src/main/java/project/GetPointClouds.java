@@ -29,8 +29,7 @@ public class GetPointClouds extends HttpServlet {
 	     Iterable<Entity> pointCloud2 = datastore.prepare(query).asIterable();
 	     for(Entity entity: pointCloud2)
 	     {
-	    	   out.println(entity.getKey().toString());
-	       
+	       out.println(entity.getKey().getName());
 	     }
 		  
 	}
