@@ -8,6 +8,7 @@
 <%@ page import="com.google.appengine.api.memcache.Expiration" %>
 <%@ page import="com.google.appengine.api.datastore.Key" %>
 <%@ page import="com.google.appengine.api.datastore.KeyFactory" %>
+<%@ page import="project.PointCloudDescription" %>
 
 <%@ page import="java.util.logging.Level" %>
 
@@ -26,30 +27,8 @@ syncCache.setErrorHandler(ErrorHandlers.getConsistentLogAndContinue(Level.INFO))
 String memcacheKey = "pcdList";
 String pointcloudlist = (String) syncCache.get(memcacheKey);
 if(pointcloudlist == null){
-  
-  pointcloudlist = new String();
-
-  DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
-  Query query = new Query("PointCloud2");
-  Iterable<Entity> pointCloud2 = datastore.prepare(query).asIterable();
-  
-  for(Entity entity: pointCloud2)
-  {
-          Key infoKey = KeyFactory.createKey("PointCloudMeta", entity.getKey().getName());
-
-          query = new Query(infoKey);
-          Entity meta = datastore.prepare(query).asSingleEntity();
-
-          if(meta == null){
-        	  continue;
-          }
-          
-          pointcloudlist = pointcloudlist +
-           "<p><a target=\"viewer\" href=\"http://www.pointclouds.org/assets/viewer/pcl_viewer.html?load=http://"
-            + request.getServerName() + "/GetPCD/" + entity.getKey().getName() + "\" >"
-            + (String) meta.getProperty("name")+ "</a></p>";
-  }
-  syncCache.put(memcacheKey, pointcloudlist, Expiration.byDeltaSeconds(20));
+  pointcloudlist =  PointCloudDescription.descriptionHtmlString(request.getServerName(), request.getServerPort());
+  syncCache.put(memcacheKey, pointcloudlist, Expiration.byDeltaSeconds(1));
 }
 
 

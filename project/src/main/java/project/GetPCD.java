@@ -78,7 +78,11 @@ public class GetPCD extends HttpServlet {
 	
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException{
 		
-		String keyStr =request.getPathInfo().substring(1);// request.getParameter("key");
+		/* skip the first key / */
+		String keyStr =request.getPathInfo().substring(1);
+		
+		/* This allows /$key/filename.pcd where filename can be whatever */
+		keyStr = keyStr.split("/")[0];
         DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
 
         Key pclKey = KeyFactory.createKey("PointCloud2", keyStr);

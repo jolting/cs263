@@ -64,32 +64,9 @@ public class UploadPCDRequest extends HttpServlet {
         datastore.put(meta);
 
         //invalidate the cached list
-        String pointcloudlist = new String();
-
-        Query query = new Query("PointCloud2");
-        Iterable<Entity> pointCloud2 = datastore.prepare(query).asIterable();
-        for(Entity entity: pointCloud2)
-        {
-          Key infoKey = KeyFactory.createKey("PointCloudMeta", entity.getKey().getName());
-
-          query = new Query(infoKey);
-          meta = datastore.prepare(query).asSingleEntity();
-
-          if(meta == null){
-        	  continue;
-          }
-          
-          pointcloudlist = pointcloudlist +
-           "<p><a target=\"viewer\" href=\"http://www.pointclouds.org/assets/viewer/pcl_viewer.html?load=http://"
-            + request.getServerName() + "/GetPCD/" + entity.getKey().getName() + "\" >"
-            + (String) meta.getProperty("name")+ "</a></p>";
-        }
-        /* update every 20 seconds */
-        syncCache.put(memcacheKey, pointcloudlist, Expiration.byDeltaSeconds(20));
+        String pointcloudlist =  PointCloudDescription.descriptionHtmlString(request.getServerName(), request.getServerPort());
+        syncCache.put(memcacheKey, pointcloudlist, Expiration.byDeltaSeconds(1));
         
 		response.sendRedirect("/processing.html");
-		
-		
-		
 	}
 }
