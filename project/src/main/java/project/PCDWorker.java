@@ -74,6 +74,17 @@ public class PCDWorker extends HttpServlet {
 	 */
 	private static final long serialVersionUID = 1L;
 
+	
+	/**
+	 * This function takes a ascii floating value and inserts it into the correct
+	 * position in the point cloud.
+	 * 
+	 * @param  st    Input string
+	 * @param  cloud The cloud to insert the value into
+	 * @param  point_index The point index that were are parsing.
+	 * @param  field_idx   The field number we are parsing.
+	 * @param  field_count The field counter.
+	 */
 	  void
 	  copyStringValueFloat (String st, PointCloud2 cloud,
 	                   int point_index, int field_idx, int fields_count)
@@ -83,33 +94,29 @@ public class PCDWorker extends HttpServlet {
 	    {
 	      value = Float.NaN;
 	      cloud.is_dense = false;
-	      /*
-          cloud.data.getBytes()[point_index*cloud.point_step + 
-		    									 cloud.fields[field_idx].offset + 
-		    									 fields_count * 4] = (byte) 0x00;
-          cloud.data.getBytes()[point_index*cloud.point_step + 
-								 cloud.fields[field_idx].offset + 
-								 fields_count * 4+1] = (byte) 0x00;
-          cloud.data.getBytes()[point_index*cloud.point_step + 
-								 cloud.fields[field_idx].offset + 
-								 fields_count * 4+2] = (byte) 0x00;
-          cloud.data.getBytes()[point_index*cloud.point_step + 
-								 cloud.fields[field_idx].offset + 
-								 fields_count * 4+3] = (byte) 0x80;
-								 */
 	    }
 	    else
 	    {
 	    	value = Float.parseFloat(st);
 	    }
-//	    ByteBuffer.wrap(cloud.data.getBytes()).order(ByteOrder.LITTLE_ENDIAN)
 
 	    ByteBuffer.wrap(cloud.data.getBytes()).order(ByteOrder.LITTLE_ENDIAN).putFloat(point_index*cloud.point_step + 
 				 cloud.fields[field_idx].offset + 
 				 fields_count * 4,value);
 
 	  }
-	  
+
+		/**
+		 * This function takes a ascii uint32 value and inserts it into the correct
+		 * position in the point cloud.
+		 * 
+		 * @param  st    Input string
+		 * @param  cloud The cloud to insert the value into
+		 * @param  point_index The point index that were are parsing.
+		 * @param  field_idx   The field number we are parsing.
+		 * @param  field_count The field counter.
+		 */
+
 	  void
 	  copyStringValueUINT32(String st, PointCloud2 cloud,
 	                   int point_index, int field_idx, int fields_count) throws PCDException
@@ -138,11 +145,15 @@ public class PCDWorker extends HttpServlet {
 							  cloud.fields[field_idx].offset + 
 							  fields_count * 4 + 3] = (byte) (value >> 24);
 
-//	    ByteBuffer.wrap(cloud.data.getBytes()).putInt(point_index*cloud.point_step + 
-//	    									   cloud.fields[field_idx].offset + 
-//	    									   fields_count * 4,value);
 	  }
 	  
+		/**
+		 * Returns the Field type 
+		 * 
+		 * @param  size    Number of bytes for the field.
+		 * @param  type    'I' for integer, 'U' for unsigned integer, 'F' for float.
+		 * @return type enumeration.
+		 */
 	
 	byte getFieldType (int size, char type)
 	  {
@@ -176,7 +187,13 @@ public class PCDWorker extends HttpServlet {
 	        return (byte) -1;
 	    }
 	  }
-	
+
+	/**
+	 * The method processes a pcd file and puts point clouds into the datastore and blobstore.
+	 * 
+	 * @param  request The servlet request object.
+	 * @param  response The response object.
+	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String key = request.getParameter("blobKey");
@@ -394,12 +411,12 @@ public class PCDWorker extends HttpServlet {
 		        }
 		        if (line_type.substring (0, 4).equals("DATA"))
 		        {
-		          if(st[1] == "ascii")
+		          if(st[1].equals("ascii"))
 		            textMode = 1;
-		          else if(st[1] == "binary")
+		          else if(st[1].equals("binary"))
 		        	textMode = 0;
 		          else
-		        	throw new PCDException("binary compressed not supported");
+		        	throw new PCDException("binary compressed not supported: " + st[1]);
 		          continue;
 		        }	
 		        /* done reading the header */
@@ -416,8 +433,6 @@ public class PCDWorker extends HttpServlet {
 				// Ignore empty lines
 				if (line.equals(""))
 				  continue;
-
-				//log.info(Integer.toString(idx));
 
 				String[] st = line.split("\t|\r| ");
 
@@ -482,6 +497,7 @@ public class PCDWorker extends HttpServlet {
         pointCloud2.setProperty("is_bigendian", cloud.is_bigendian);
         pointCloud2.setProperty("row_step", cloud.row_step);
 
+        
         int idx = 0;
         for(PointField field :cloud.fields)
         {
