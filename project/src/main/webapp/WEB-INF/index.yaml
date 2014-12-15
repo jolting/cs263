@@ -1,0 +1,8 @@
+indexes:
+
+- kind: PointField
+  ancestor: no
+  properties:
+  - name: name
+  - name: idx
+    direction: asc

@@ -38,6 +38,15 @@
         <url-pattern>/GetPointClouds</url-pattern>
     </servlet-mapping> 
     
+    <servlet>
+        <servlet-name>GetUploadURL</servlet-name>
+        <servlet-class>project.GetUploadURL</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>GetUploadURL</servlet-name>
+        <url-pattern>/GetUploadURL</url-pattern>
+    </servlet-mapping> 
+        
     <welcome-file-list>
         <welcome-file>index.jsp</welcome-file>
     </welcome-file-list>

@@ -3,10 +3,13 @@ package project;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
+import javax.servlet.ServletInputStream;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import org.apache.tools.ant.types.Description;
 
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -18,7 +21,7 @@ import com.google.gson.Gson;
 
 
 
-public class GetPointClouds extends HttpServlet {
+public class CreateDescriptionPointCloud extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 	/**
 	 * JSON list of point clouds.
@@ -26,21 +29,20 @@ public class GetPointClouds extends HttpServlet {
 	 * @param  request The servlet request object.
 	 * @param  response The response object.
 	 */
-	protected void doGet(HttpServletRequest request, HttpServletResponse response)
+	
+	protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 		 DatastoreService datastore = DatastoreServiceFactory.getDatastoreService();
-         Query query = new Query("PointCloudMeta");
-         ServletOutputStream out = response.getOutputStream();
-	     
-	     Iterable<Entity> pointCloudMeta = 
-	    		 datastore.prepare(query).asIterable();
-
+         
 	     Gson gson = new Gson();
-    	 out.println(gson.toJson(Iterables.toArray(pointCloudMeta, Entity.class)));
+	     byte[] b = new byte[4096];
+	     request.getInputStream().read(b);
+	     
+    	 PCDescription input = gson.fromJson(b.toString(), PCDescription.class);
+    	 
+    	 Entity description = new Entity("PointCloudDescription", input.key);
+    	 description.setProperty("value", input.description);
 
-//	     for(Entity entity: pointCloudmeta)
-//	     {
-	    	 
-//	     }
+    	 datastore.put(description);
 	}
 }

@@ -5,9 +5,9 @@
     <threadsafe>true</threadsafe>
     
     <static-files>
-        <include path="/**.html" > 
-            <http-header name="Access-Control-Allow-Origin" value="*" />
-        </include> 
+        <include path="/**.html" />
+        <include path="/stylesheets/**.css" /> 
+        
     </static-files>
     
     
